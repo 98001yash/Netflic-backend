@@ -1,16 +1,20 @@
 package com.company.netflix.auth_service.service;
 
 
+import com.company.netflix.auth_service.dtos.LoginRequestDto;
 import com.company.netflix.auth_service.dtos.SignupRequestDto;
 import com.company.netflix.auth_service.dtos.UserResponseDto;
 import com.company.netflix.auth_service.entity.User;
 import com.company.netflix.auth_service.enums.Role;
+import com.company.netflix.auth_service.exceptions.ResourceNotFoundException;
 import com.company.netflix.auth_service.exceptions.RuntimeConflictException;
 import com.company.netflix.auth_service.repository.UserRepository;
 import com.company.netflix.auth_service.utils.PasswordUtils;
+import io.jsonwebtoken.Claims;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.modelmapper.ModelMapper;
+import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.stereotype.Service;
 
 @Service
@@ -43,5 +47,56 @@ public class AuthService {
         log.info("User registered successfully with id: {}",savedUser.getId());
 
         return modelMapper.map(savedUser, UserResponseDto.class);
+    }
+
+
+    public String login(LoginRequestDto loginRequestDto){
+        log.info("Login attempt for email: {}",loginRequestDto.getEmail());
+
+        User user = userRepository.findByEmail(loginRequestDto.getEmail())
+                .orElseThrow(()-> {
+                    log.warn("Login failed.User not found for email: {}",loginRequestDto.getEmail());
+                    throw new ResourceNotFoundException("invalid email or password");
+                });
+
+        if(!PasswordUtils.checkPassword(loginRequestDto.getPassword(),user.getPassword())){
+            log.warn("Login failed. Invalid password for email: {}",loginRequestDto.getEmail());
+            throw new BadCredentialsException("Invalid email or password");
+        }
+
+        String token = jwtService.generateAccessToken(user);
+        log.info("JWT generated successfully for userId: {}",user.getId());
+
+        return token;
+    }
+
+    public UserResponseDto getUserById(Long userId){
+        log.info("Fetching user by Id: {}",userId);
+
+        User user = userRepository.findById(userId)
+                .orElseThrow(()-> {
+                    log.warn("User not found with id: {}",userId);
+                    return new ResourceNotFoundException("User not found with id:"+userId);
+                });
+
+        log.info("User found with id: {}",userId);
+        return modelMapper.map(user, UserResponseDto.class);
+    }
+
+    public UserResponseDto getCurrentUser(String authHeader){
+        if(authHeader == null || !authHeader.startsWith("Bearer ")){
+            log.warn("Invalid or missing authorization header");
+            throw new BadCredentialsException("Invalid or missing token");
+        }
+
+
+        String token = authHeader.substring(7);
+        Claims claims = jwtService.extractAllClaims(token);
+
+        Long userId = claims.get("userId",Long.class);
+
+        log.info("Extracted userId {} from token",userId);
+
+        return getUserById(userId);
     }
 }
