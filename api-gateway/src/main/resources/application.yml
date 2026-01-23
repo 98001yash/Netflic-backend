@@ -34,12 +34,12 @@ spring:
           - AuthenticationFilter
 
 
-#      - id: catalog-service
-#        uri: lb://catalog-service
-#        predicates:
-#          - Path=/catalog/**
-#        filters:
-#          - AuthenticationFilter
+      - id: catalog-service
+        uri: lb://catalog-service
+        predicates:
+          - Path=/catalog/**
+        filters:
+          - AuthenticationFilter
 #
 #
 #      - id: user-service
